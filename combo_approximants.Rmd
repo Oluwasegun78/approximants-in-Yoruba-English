@@ -1,0 +1,632 @@
+---
+title: "Spectral change and duration of approximants in NE for Language Variation Journal"
+author: "Melefa et al."
+date: "2024-June"
+output:
+  word_document: default
+---
+
+#Combined analysis
+
+
+```{r}
+library(dplyr)
+library(tidyverse)
+library(tidyr)
+#install.packages("ggplot2")
+#install.packages("ggpubr")
+library(ggplot2)
+library(ggpubr)
+#install.packages
+library(sjPlot)
+library(phonTools)
+library(lmerTest)
+library(performance)
+library(car)
+library(MASS)
+library(caret)
+library(e1071)
+```
+
+
+```{r}
+app_southwest <- read_csv("C:/Users/oamon/OneDrive - University of Pittsburgh/Desktop/Ongoing projects 202324/Melefa's approximant/app_ogbo_pre.csv",
+               na=c("", "Na", "NA", "N/A", "na", "n/a", "--undefined--"))
+
+app_north <- read_csv("C:/Users/oamon/OneDrive - University of Pittsburgh/Desktop/Ongoing projects 202324/Melefa's approximant/app_jos_pre.csv",
+               na=c("", "Na", "NA", "N/A", "na", "n/a", "--undefined--"))
+
+head(app_southwest)
+head(app_north)
+```
+
+
+# Join the dataframes by `variables in both dataframes` that is unique to both dataframes
+```{r}
+app_southwest_north_combo <- full_join(app_southwest, app_north, by = c("Speaker", "Word", "approximants_only", "approximants", "Begin_Time_s", "End_Time_s", "Duration_ms", "F0_20", "F0_50", "F0_80", "F1_20", "F1_50", "F1_80", "F2_20", "F2_50", "F2_80", "F3_20", "F3_50", "F3_80", "Gender", "Age", "POB", "Manner", "vocalic", "appsequence", "POA", "Education"))
+#write.csv(app_southwest_north_combo, 'app_southwest_north_combo.csv', row.names = FALSE)
+```
+
+#Normalization 
+To reduce differences in vocal tracts across gender and geographical location
+```{r}
+#z-score normalization
+z_score_normalization <- function(x) {
+  return((x - mean(x)) / sd(x))
+}
+
+app_southwest_north_combo <- app_southwest_north_combo %>%
+  mutate(
+    z_score_dur = z_score_normalization(Duration_ms),
+    z_score_BeginDUR = z_score_normalization(Begin_Time_s),
+    z_score_EndDUR = z_score_normalization(End_Time_s))
+```
+
+
+# Descriptive analysis of approximants in Western Nigerian English
+```{r check for duration difference}
+app_southwest_north_combo %>%
+  group_by(approximants_only) %>%
+  summarize(mean_appdur = mean(z_score_dur))
+
+app_southwest_north_combo %>%
+  group_by(vocalic) %>%
+  summarize(mean_appdur = mean(z_score_dur))
+
+
+app_southwest_north_combo %>%
+  group_by(POA) %>%
+  summarize(mean_appdur = mean(z_score_dur))
+
+app_southwest_north_combo %>%
+  group_by(Manner) %>%
+  summarize(mean_appdur = mean(z_score_dur))
+
+app_southwest_north_combo %>%
+  group_by(approximants_only, POB) %>%
+  summarize(mean_appdur = mean(z_score_dur))
+
+app_southwest_north_combo %>%
+  group_by(POA, POB) %>%
+  summarize(mean_appdur = mean(z_score_dur))
+
+app_southwest_north_combo %>%
+  group_by(Manner, POB) %>%
+  summarize(mean_appdur = mean(z_score_dur))
+```
+
+#Visualization of the descriptive analysis
+```{r}
+ggplot(data = app_southwest_north_combo) + 
+  geom_boxplot(mapping = aes(x = approximants_only, y = z_score_dur, color = POB)) + 
+  facet_wrap(~ vocalic)+
+  ggtitle("Duration of approximants phonological environment by Place of Birth")
+   
+ggplot(data = app_southwest_north_combo) + 
+  geom_boxplot(mapping = aes(x = Manner, y = z_score_dur, color = POA)) + 
+  facet_wrap(~ POB) +
+   ggtitle("Duration of manner of approximants by Place of Birth")
+
+# Assuming `app_jos_app_combined` is your data frame and it has a column `Education`
+ggplot(data = app_southwest_north_combo) + 
+  geom_boxplot(mapping = aes(x = Manner, y = z_score_dur, fill = Education, color = POA)) + 
+  facet_wrap(~ POB) +
+  ggtitle("Duration of Manner of Approximants by Place of Birth and Education") +
+  scale_fill_brewer(palette = "Set3") + # Optional: for better fill color distinction
+  scale_color_brewer(palette = "Dark2") # Optional: for better line color distinction
+
+
+#drop na from the visualization
+ggplot(na.omit (app_southwest_north_combo)) + #remove the NAs
+  geom_boxplot(mapping = aes(x = Gender, y = z_score_dur, color = Age)) + 
+  facet_wrap(~ POB)+
+  ggtitle("Duration of approximants by gender across Place of Birth")
+
+
+ggplot(data = app_southwest_north_combo) + 
+  geom_boxplot(mapping = aes(x = approximants_only, y = z_score_dur, color = Education)) + 
+  facet_wrap(~ POB)+
+  ggtitle("Duration of approximants by eduaction and Place of Birth")
+```
+
+
+#Regression analysis of duration in WNES
+
+```{r}
+dur_app <- lm(z_score_dur ~ 1 + approximants_only + vocalic, data = app_southwest_north_combo)
+dur_app %>% summary()
+library(sjPlot)
+dur_app %>% tab_model()
+anova(dur_app)
+plot_model(dur_app, type = "pred", terms = c("approximants_only", "vocalic"))
+#plot(TL_social)
+
+dur_social <- lm(z_score_dur ~ 1 + POB + Gender, data = app_southwest_north_combo)
+dur_social %>% summary()
+dur_social %>% tab_model()
+anova(dur_social)
+plot_model(dur_social, type = "pred", terms = c("POB", "Gender"))
+```
+The one-way ANOVA showed that duration patterns for approximant differs significantly (F(3, 4349) = 14.29, p < 2.897e-09). However, a closer look at the regression analysis revealed that the production of only lateral approximant ([l]) was not significant (p = 0.467). {does this agree with previous study on approximant in NE? - confirm this after the review}.
+We decided to check the effect of the phonological environment. The results were significant (F(2, 4347) = 32.31, p < 1.173e-14). The prevocalic and postvocalic approximants were .73 and .10 longer than the intervocalic approximants. This suggests that the phonological environment determines duration patterns for approximants in YE. The results were similar for the approximants as POA and manner (p<0.05).
+
+The mixed effect regression revealed differences in duration patterns of approximants between the southern and northern YE speakers (F(1, 4350  = 54.35), p < 2.23-16). The estimates revealed that the southern YE speakers were 30 ms shorter than the northern YE speaker, similarly, male speakers were 9ms shorter in duration for approximants than the female counterparts. We tested educated and age, but they did not contribute to the model and we decided to omit them for the duration analysis.
+
+
+# Normalization of formants
+```{r}
+#lobanoz normalization
+ #Define a function to apply Lobanov normalization
+
+lobanov_normalization <- function(app_southwest_north_combo) {
+ app_southwest_north_combo <- app_southwest_north_combo %>%
+    group_by(Speaker) %>%
+    mutate(
+      F1_20nov = (F1_20 - mean(F1_20)) / sd(F1_20),
+      F1_50nov = (F1_50 - mean(F1_50)) / sd(F1_50),
+      F1_80nov = (F1_80 - mean(F1_80)) / sd(F1_80),
+      F2_20nov = (F2_20 - mean(F2_20)) / sd(F2_20),
+      F2_50nov = (F2_50 - mean(F2_50)) / sd(F2_50),
+      F2_80nov = (F2_80 - mean(F2_80)) / sd(F2_80),
+      F3_20nov = (F3_20 - mean(F3_20)) / sd(F3_20),
+      F3_50nov = (F3_50 - mean(F3_50)) / sd(F3_50),
+      F3_80nov = (F3_80 - mean(F3_50)) / sd(F3_80)) %>%
+    ungroup()
+}
+```
+
+
+# Calculate trajectory length of approximants in WNES
+```{r}
+# Calculate trajectory length (TL) for each row in the dataframe
+app_southwest_north_combo$TL <- sqrt((app_southwest_north_combo$F1_50nov - app_southwest_north_combo$F1_20nov)^2 + (app_southwest_north_combo$F2_50nov - app_southwest_north_combo$F2_20nov)^2) + 
+              sqrt((app_southwest_north_combo$F1_80nov - app_southwest_north_combo$F1_50nov)^2 + (app_southwest_north_combo$F2_80nov - app_southwest_north_combo$F2_50nov)^2)
+
+# View the updated dataframe with TL column
+#head(app_southwest_north_combo)
+```
+
+
+
+
+# Trajectory Length (TL) regression analysis
+```{r}
+#for vowels alone
+TL_app <- lm(TL ~ 1 + approximants_only, data = app_southwest_north_combo)
+TL_app %>% summary()
+anova(TL_app)
+#library(sjPlot)
+TL_app %>% tab_model()
+plot_model(TL_app, type = "pred", terms = c("approximants_only"))
+
+
+SS_total <- sum((app_southwest_north_combo$TL - mean(app_southwest_north_combo$TL))^2)
+
+# Calculate sum of squares for the model (SS_effect)
+SS_effect <- sum((predict(TL_app) - mean(app_southwest_north_combo$TL))^2)
+
+# Calculate eta-squared
+eta_squared <- SS_effect / SS_total
+
+# Print the eta-squared value
+eta_squared
+```
+
+
+```{r}
+#for vowels and social variables
+TL_social <- lmer(TL ~ 1 + vocalic + z_score_dur + POA + POB + Gender + Age + Education +  (1|Word) + (1|Speaker), data = app_jos_app_combined)
+TL_social %>% summary()
+TL_social %>% tab_model()
+anova(TL_social)
+plot_model(TL_social, type = "pred", terms = c("POB", "vocalic", "POA", "Age", "Gender", "Education"))
+#plot(TL_social)
+```
+
+
+
+```{r}
+# Remove NAs from the dataframe
+#VISCNE_clean <- na.omit(VISCNE)
+
+# Plotting the histogram
+ggplot(app_jos_app_combined, aes(x = approximants_only, y = TL, color = POB)) +
+  geom_histogram(stat = "identity", position = "dodge", width = 0.7) +
+  labs(x = "Approximants",
+       y = "Trajectory Length",
+       color = "POB") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = c("long" = "blue", "short" = "red"))  # Customizing fill colors
+```
+Generally, southern YE speakers have shorter TL for approximant than northern YE speakers. However, in the lateral, the southern YE speakers exhibit a longer TL than northern YE. 
+
+
+not only that the trajectory length differentiate approximants among Yoruba English speakers, the direction of the formant at different points differ across the approximants
+
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+
+# Ensure approximants_only is a factor
+app_jos_app_combined$approximants_only <- as.factor(app_jos_app_combined$approximants_only)
+
+# Fit the linear model
+lm_fit <- lm(formula = trajectory_direction ~ 1 + approximants_only + z_score_BeginDUR + z_score_EndDUR, data = app_jos_app_combined)
+lm_fit %>% tab_model()
+# Check the model summary
+summary(lm_fit)
+
+# Create vectors for predictions and residuals
+app_jos_app_combined$predicted <- predict(lm_fit, newdata = app_jos_app_combined)
+app_jos_app_combined$residuals <- residuals(lm_fit)
+
+# Plot predicted values for each level of approximants_only
+plot_predictions <- ggplot(app_jos_app_combined, aes(x = approximants_only, y = predicted)) +
+  geom_boxplot() +
+  labs(x = "Approximants", y = "Predicted Trajectory Direction") +
+  scale_fill_brewer(palette = "Set3")
+
+# Plot residuals
+#plot_residuals <- ggplot(app_jos_app_combined, aes(x = predicted, y = residuals)) +
+ # geom_point(alpha = 0.5) +
+  #geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  #labs(title = "Residuals vs. Predicted Values", x = "Predicted Values", y = "Residuals") +
+  #theme_minimal()
+
+# Arrange the plots using gridExtra
+grid.arrange(plot_predictions)
+```
+```{r}
+#model_trajectory_direction <- lm(trajectory_direction ~ 1 + approximants_only, data = app_jos_app_combined)
+#summary(model_trajectory_direction)
+#model_trajectory_direction%>% tab_model()
+#anova(model_trajectory_direction)
+
+model_trajectory_social <- lm(trajectory_direction ~ 1 + approximants_only + POB + Gender + Education + Age, data = app_jos_app_combined)
+summary(model_trajectory_social)
+model_trajectory_social%>% tab_model()
+anova(model_trajectory_social)
+```
+
+```{r}
+# Summarize duration, f1, and f2 by vowels
+app_jos_app_summary <- app_jos_app_combined %>%
+  group_by(approximants_only) %>%
+  summarize(
+    mDUR = mean(z_score_dur),
+    sdDUR = sd(z_score_dur),                                       
+    mean_F1_20 = mean(F1_20_nov),
+    mean_F1_80 = mean(F1_80_nov),
+    mean_F2_20 = mean(F2_20_nov),
+    mean_F2_80 = mean(F2_80_nov),
+    mean_F1_50 = mean(F1_50_nov),
+    mean_F2_50 = mean(F2_50_nov),
+    sd_F1_20 = sd(F1_20_nov),
+    sd_F1_80 = sd(F1_80_nov),
+    sd_F2_20 = sd(F2_20_nov),
+    sd_F2_80 = sd(F2_80_nov),
+    mean_TL = mean(TL),
+    n = n()
+  )
+head(app_jos_app_summary)
+```
+```{r}
+# Create a data frame in long format for F1 and F2 values
+app_jos_app_combined_long <- app_jos_app_combined %>%
+  pivot_longer(cols = starts_with("mean_F"),
+               names_to = c("Formant", "Time"),
+               names_pattern = "mean_(F[12])_(\\d+)",
+               values_to = "mean_value") %>%
+  drop_na(mean_value)
+
+# Line plot for mean F1 and F2 values across vowels
+ggplot(app_jos_app_combined_long, aes(x = as.numeric(Time), y = mean_value, color = approximants_only, group = approximants_only)) +
+  geom_line() +
+  facet_wrap(~ Formant, scales = "free_y") +
+  labs(x = "Time Point",
+       y = "Normalized formants")
+```
+
+
+```{r}
+app_jos_app_combined_long <- app_jos_app_combined %>%
+  pivot_longer(cols = contains("nov"),
+               names_to = c("Formant", "Time"),
+               names_pattern = "mean_(F[123])_(\\d+)",
+               values_to = "mean_value") %>%
+  mutate(Time = as.numeric(Time))
+
+# Filter for relevant time points
+app_jos_app_combined_filtered <- app_jos_app_combined_long %>%
+  filter(Time %in% c(20, 50, 80))
+
+# Function to calculate slope for each vowel and formant
+calculate_slope <- function(mean_values, times) {
+  if(length(mean_values) < 2) {
+    return(NA)  # Return NA if there are less than 2 points to fit a model
+  }
+  model <- lm(mean_values ~ times)
+  slope <- coef(model)["times"]
+  return(slope)
+}
+
+# Calculate slopes for each vowel and formant, and filter out groups with insufficient data
+app_jos_app_slope <- app_jos_app_combined_filtered %>%
+  group_by(approximants_only, Formant) %>%
+  summarise(slope = calculate_slope(mean_value, Time), .groups = 'drop')
+
+# Join the slopes back to the original dataframe
+app_jos_with_slopes <- app_jos_app_combined_long %>%
+  left_join(app_jos_app_slope, by = c("approximants_only", "Formant")) %>%
+  pivot_wider(names_from = c("Formant", "Time"), values_from = c("mean_value", "slope"))
+
+# Print the modified dataframe
+print(app_jos_with_slopes)
+```
+
+
+# Spectral rate of change (SROC)
+```{r}
+#formular for spectral rate of change (SROC)
+app_jos_app_combined$SROC <- app_jos_app_combined$TL / (0.60 * app_jos_app_combined$z_score_dur)
+head(app_jos_app_combined)
+```
+```{r}
+#regression analysis for spectral rate of change across approximants
+SROC_app <- lmer(SROC ~ 1 + approximants_only + (1|Word) , data = app_jos_app_combined)
+SROC_app %>% summary()
+#SROC_app %>% tab_model()
+#plot_model(SROC_app, type = "pred", terms = c("Vowel"))
+
+SS_total <- sum((app_jos_app_combined$SROC - mean(app_jos_app_combined$SROC))^2)
+
+# Calculate sum of squares for the model (SS_effect)
+SS_effect <- sum((predict(SROC_app) - mean(app_jos_app_combined$SROC))^2)
+
+# Calculate eta-squared
+eta_squared <- SS_effect / SS_total
+
+# Print the eta-squared value
+eta_squared
+```
+
+
+
+
+
+# Spectral angle direction
+
+```{r}
+# Example data frame with F1 and F2 values at 20% and 80% points
+# Calculate the spectral angle
+app_jos_app_combined$spectral_angle <- atan2(app_jos_app_combined$F2_80_nov - app_jos_app_combined$F2_20_nov, app_jos_app_combined$F1_80_nov - app_jos_app_combined$F1_20_nov) * 180 / pi
+
+# Adjust the angle based on the condition
+app_jos_app_combined$spectral_angle <- ifelse(app_jos_app_combined$F2_80_nov <= app_jos_app_combined$F2_20_nov, app_jos_app_combined$spectral_angle + 180, app_jos_app_combined$spectral_angle)
+
+head(app_jos_app_combined)
+```
+
+#MANOVA for spectral angle of direction and SROC
+
+```{r}
+#manova_spectral_SROC <- manova(cbind(SROC, spectral_angle) ~ approximants_only * vocalic * POA * Manner * POB * Gender * Education * Speaker, data = app_jos_app_combined)
+
+app_ling <- manova(cbind(SROC, spectral_angle) ~ approximants_only * z_score_dur * vocalic * POA + Manner, data = app_jos_app_combined)
+summary(app_ling)
+
+#plot_model(manova_spectral_SROC, type = "pred", terms = c("approximants_only", "POA", "POB", "Gender", "Education"))
+```
+
+```{r}
+model_social <- manova(cbind(SROC, spectral_angle) ~ approximants_only * Gender + POB * Education + Speaker, data = app_jos_app_combined)
+summary(model_social)
+```
+
+
+```{r}
+VISCNE_clean <- na.omit(VISCNE)
+
+ggplot(VISCNE_clean, aes(x = Regional_varieties, y = spectral_angle, color = Vowel)) +
+  geom_histogram(stat = "identity", position = "dodge", width = 0.7) +
+  facet_wrap(~Gender)
+  labs(x = "Regional varieties of NE",
+       y = "SROC Hz/ms",
+       fill = "Length") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_manual(values = c("long" = "blue", "short" = "red"))  # Customizing fill colors
+```
+Figure 4: Spectral Rate of Change in hertz over milliseconds shows greater change for male speakers especially in Igbo English than the female speakers in the three regional varieties of NE.
+
+
+
+#formant slope for approximant description 
+```{r}
+# Define a function to calculate slope and intercept for formants
+calculate_slope_intercept <- function(F1_20_nov, F2_50_nov, F3_80_nov, z_score_dur) {
+  time_points <- c(0.20, 0.50, 0.80)
+  formant_values <- c(F1_20_nov, F2_50_nov, F3_80_nov)
+  
+  lm_model <- lm(formant_values ~ time_points)
+  
+  slope <- coef(lm_model)[2]
+  intercept <- coef(lm_model)[1]
+  
+  return(list(slope = slope, intercept = intercept))
+}
+
+# Apply the function to the dataframe
+app_jos_app_combined <- app_jos_app_combined %>%
+  rowwise() %>%
+  mutate(
+    f1_slope_intercept = list(calculate_slope_intercept(F1_20_nov, F1_50_nov, F1_80_nov, z_score_dur)),
+    f2_slope_intercept = list(calculate_slope_intercept(F2_20_nov, F2_50_nov, F2_80_nov, z_score_dur)),
+    f3_slope_intercept = list(calculate_slope_intercept(F3_20_nov, F3_50_nov, F3_80_nov, z_score_dur))
+  ) %>%
+  mutate(
+    f1_slope = f1_slope_intercept$slope,
+    f1_intercept = f1_slope_intercept$intercept,
+    f2_slope = f2_slope_intercept$slope,
+    f2_intercept = f2_slope_intercept$intercept,
+    f3_slope = f3_slope_intercept$slope,
+    f3_intercept = f3_slope_intercept$intercept,
+    slope_duration = (z_score_BeginDUR - z_score_EndDUR) / z_score_dur
+  ) %>%
+  select(-f1_slope_intercept, -f2_slope_intercept, -f3_slope_intercept)
+
+# Remove rowwise grouping
+app_jos_app_combined <- ungroup(app_jos_app_combined)
+
+# Print the updated dataframe
+print(app_jos_app_combined)
+```
+
+# MANOVA formant slope
+```{r}
+manova_slope <- manova(cbind(f1_slope, f2_slope, f3_slope, slope_duration) ~ approximants_only * POB * Gender * Education *  Speaker, data = app_jos_app_combined)
+summary(manova_slope)
+# Summary of the MANOVA
+summary(manova_slope, test = "Pillai")  # You can also use "Wilks", "Hotelling-Lawley", or "Roy"
+```
+
+# MANOVA formant slope with social variables
+```{r}
+manova_slope <- manova(cbind(f1_slope, f2_slope, f3_slope, slope_duration) ~ approximants_only * z_score_dur * vocalic * POA * Manner, data = app_jos_app_combined)
+summary(manova_slope)
+```
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(gridExtra)  # Or you can use patchwork for arranging multiple plots
+
+# Assuming your data frame is named `app_jos_app_combined`
+# Create individual plots for each slope
+
+plot_f1_slope <- ggplot(app_jos_app_combined, aes(x = POB, y = f1_slope, fill = Gender)) +
+  geom_boxplot() +
+  labs(title = "F1 Slope by POB & Gender", x = "POB", y = "F1 Slope") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3")
+
+plot_f2_slope <- ggplot(app_jos_app_combined, aes(x = POB, y = f2_slope, fill = Gender)) +
+  geom_boxplot() +
+  labs(title = "F2 Slope by POB & Gender", x = "POB", y = "F2 Slope") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3")
+
+plot_f3_slope <- ggplot(app_jos_app_combined, aes(x = POB, y = f3_slope, fill = Gender)) +
+  geom_boxplot() +
+  labs(title = "F3 Slope by POB & Gender", x = "Place of Birth", y = "F3 Slope") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3")
+
+plot_slope_duration <- ggplot(app_jos_app_combined, aes(x = POB, y = slope_duration, fill = Gender)) +
+  geom_boxplot() +
+  labs(title = "Slope Duration by POB & Gender", x = "POB", y = "Slope Duration") +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3")
+
+# Arrange the plots using gridExtra
+grid.arrange(plot_f1_slope, plot_f2_slope, plot_f3_slope, plot_slope_duration, ncol = 2)
+
+# Alternatively, if you have the patchwork library installed, you can use:
+# library(patchwork)
+# plot_f1_slope + plot_f2_slope + plot_f3_slope + plot_slope_duration + plot_layout(ncol = 2)
+
+```
+
+
+#MANOVA formant and social variables
+
+```{r}
+# Assuming 'mp' is your dataframe containing the relevant variables
+# Ensure your dataframe has columns: regional_varieties, gender, style, speaker, vowel, F1, F2, F3
+
+# Perform MANOVA
+formant_model <- manova(cbind(F1_50_nov, F2_50_nov) ~ approximants_only * z_score_dur * POA * Manner * vocalic, data = app_jos_app_combined)
+summary(formant_model)
+
+# Summary of the MANOVA
+summary(formant_model, test = "Pillai")  # You can also use "Wilks", "Hotelling-Lawley", or "Roy"
+```
+
+
+```{r}
+# Assuming 'mp' is your dataframe containing the relevant variables
+# Ensure your dataframe has columns: regional_varieties, gender, style, speaker, vowel, F1, F2, F3
+
+# Perform MANOVA
+formant_social <- manova(cbind(F1_50_nov, F2_80_nov) ~ approximants_only * POB * Gender * Education *  Speaker, data = app_jos_app_combined)
+summary(formant_social)
+
+# Summary of the MANOVA
+summary(formant_social, test = "Pillai")  # You can also use "Wilks", "Hotelling-Lawley", or "Roy"
+```
+#trajectory direction
+ 
+```{r}
+app_jos_app_combined <- app_jos_app_combined %>%
+  mutate(
+    trajectory_direction = atan2((F2_80_nov - F2_20_nov), (F1_80_nov - F1_20_nov))
+  )
+```
+
+```{r}
+TL_TD <- manova(cbind(TL, trajectory_direction) ~ approximants_only * z_score_dur * POA * vocalic * Manner, data = app_jos_app_combined)
+summary(TL_TD)
+
+# Summary of the MANOVA
+summary(TL_TD, test = "Pillai")  # You can also use "Wilks", "Hotelling-Lawley", or "Roy"
+```
+
+```{r}
+TD_social <- manova(cbind(TL, trajectory_direction) ~ approximants_only * POB * Gender * Education *  Speaker, data = app_jos_app_combined)
+summary(TD_social)
+
+# Summary of the MANOVA
+summary(TD_social, test = "Pillai")  # You can also use "Wilks", "Hotelling-Lawley", or "Roy"
+```
+
+
+
+
+
+```{r}
+# Save plots as high-resolution images
+ggsave("manova_results_visual.png", manova_results_visual, width = 10, height = 8, dpi = 300)
+```
+
+
+```{r}
+library(nlme)
+
+# Fit a mixed effects model for each dependent variable separately
+model_f1_slope <- lme(f1_slope ~ approximants_only + POB + Gender + Education, random = ~ 1 | Speaker, data = app_jos_app_combined)
+model_f2_slope <- lme(f2_slope ~ approximants_only + POB + Gender + Education, random = ~ 1 | Speaker, data = app_jos_app_combined)
+model_f3_slope <- lme(f3_slope ~ approximants_only + POB + Gender + Education, random = ~ 1 | Speaker, data = app_jos_app_combined)
+model_slope_duration <- lme(slope_duration ~ approximants_only + POB + Gender + Education, random = ~ 1 | Speaker, data = app_jos_app_combined)
+
+# Summarize each model
+summary(model_f1_slope)
+summary(model_f2_slope)
+summary(model_f3_slope)
+summary(model_slope_duration)
+```
+
+
+
+```{r}
+session_info()
+```
+
+
+
+
+
+
+
+
